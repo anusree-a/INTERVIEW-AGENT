@@ -1,0 +1,39 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Home - Interview Agent{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body text-center">
+                <h1 class="card-title display-4 mb-4">Welcome to Interview Agent</h1>
+                <p class="card-text lead mb-4">
+                    Streamline your interview process with our comprehensive HR management system.
+                </p>
+                
+                <div class="row mt-5">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">Admin Portal</h5>
+                                <p class="card-text">Manage HR accounts and oversee the entire system.</p>
+                                <a href="{% url 'admin_login' %}" class="btn btn-primary">Admin Login</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">HR Portal</h5>
+                                <p class="card-text">Access your HR dashboard to manage interviews.</p>
+                                <a href="{% url 'hr_login' %}" class="btn btn-success">HR Login</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
