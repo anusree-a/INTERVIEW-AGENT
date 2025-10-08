@@ -1,0 +1,158 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Payment Gateway - Interview Agent{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Complete Your Subscription</h3>
+                <p class="text-muted mb-0">Secure payment processing</p>
+            </div>
+            <div class="card-body">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <!-- Order Summary -->
+                <div class="card bg-light mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Order Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Company Details</h6>
+                                <p class="mb-1"><strong>{{ company.name }}</strong></p>
+                                <p class="mb-1">{{ company.contact_person }}</p>
+                                <p class="mb-1">{{ company.email }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Subscription Plan</h6>
+                                <p class="mb-1"><strong>{{ plan.name }}</strong></p>
+                                <p class="mb-1">{{ plan.description }}</p>
+                                <p class="mb-1">Duration: {{ plan.duration_months }} month(s)</p>
+                                <hr>
+                                <h5 class="text-primary">Total: ${{ plan.price }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Methods -->
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <h5 class="mb-3">Select Payment Method</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card payment-method-card" onclick="selectPaymentMethod('credit_card')">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-credit-card fa-3x text-primary mb-3"></i>
+                                    <h6>Credit/Debit Card</h6>
+                                    <p class="text-muted small">Visa, MasterCard, American Express</p>
+                                    <input type="radio" name="payment_method" value="credit_card" class="form-check-input" checked>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card payment-method-card" onclick="selectPaymentMethod('paypal')">
+                                <div class="card-body text-center">
+                                    <i class="fab fa-paypal fa-3x text-info mb-3"></i>
+                                    <h6>PayPal</h6>
+                                    <p class="text-muted small">Pay securely with PayPal</p>
+                                    <input type="radio" name="payment_method" value="paypal" class="form-check-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card payment-method-card" onclick="selectPaymentMethod('bank_transfer')">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-university fa-3x text-success mb-3"></i>
+                                    <h6>Bank Transfer</h6>
+                                    <p class="text-muted small">Direct bank transfer</p>
+                                    <input type="radio" name="payment_method" value="bank_transfer" class="form-check-input">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card payment-method-card" onclick="selectPaymentMethod('demo')">
+                                <div class="card-body text-center border-warning">
+                                    <i class="fas fa-flask fa-3x text-warning mb-3"></i>
+                                    <h6>Demo Payment</h6>
+                                    <p class="text-muted small">For testing purposes only</p>
+                                    <input type="radio" name="payment_method" value="demo" class="form-check-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Demo Notice -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Demo Payment Gateway:</strong> This is a demonstration payment system. 
+                        In a real application, this would integrate with actual payment processors like Stripe, PayPal, or Razorpay.
+                        Select "Demo Payment" to complete the registration process.
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                        <a href="{% url 'select_plan' %}" class="btn btn-secondary me-md-2">Back to Plans</a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-lock me-2"></i>Complete Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.payment-method-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid #dee2e6;
+}
+
+.payment-method-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-color: #007bff;
+}
+
+.payment-method-card.selected {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+</style>
+
+<script>
+function selectPaymentMethod(method) {
+    // Remove selected class from all cards
+    document.querySelectorAll('.payment-method-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // Add selected class to clicked card
+    event.currentTarget.classList.add('selected');
+    
+    // Select the radio button
+    document.querySelector(`input[value="${method}"]`).checked = true;
+}
+
+// Initialize with first payment method selected
+document.addEventListener('DOMContentLoaded', function() {
+    selectPaymentMethod('credit_card');
+});
+</script>
+{% endblock %}
