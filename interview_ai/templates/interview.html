@@ -239,6 +239,30 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .voice-recording {
+            background: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .transcript-preview {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #1976d2;
+            display: none;
+        }
+        
+        .transcript-preview.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -290,6 +314,8 @@
                     </div>
                 </div>
                 
+                <div class="transcript-preview" id="transcriptPreview"></div>
+                
                 <div class="loading" id="loadingIndicator">
                     <div class="spinner"></div>
                     <p>AI is thinking...</p>
@@ -307,12 +333,11 @@
     <script>
         const SESSION_TOKEN = '{{ session.token }}';
         let mediaStream = null;
+        let recognition = null;
         let isRecording = false;
-        let mediaRecorder = null;
-        let audioChunks = [];
         let cheatingEventCount = 0;
         
-        // WebRTC Setup
+        // Elements
         const videoElement = document.getElementById('videoPreview');
         const permissionOverlay = document.getElementById('permissionOverlay');
         const requestPermissionBtn = document.getElementById('requestPermissionBtn');
@@ -325,6 +350,39 @@
         const warningText = document.getElementById('warningText');
         const toggleMicBtn = document.getElementById('toggleMicBtn');
         const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+        const transcriptPreview = document.getElementById('transcriptPreview');
+        
+        // Initialize Web Speech API (100% FREE)
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            
+            recognition.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join('');
+                
+                transcriptPreview.textContent = '🎤 ' + transcript;
+                transcriptPreview.classList.add('show');
+                
+                if (event.results[0].isFinal) {
+                    messageInput.value = transcript;
+                    transcriptPreview.classList.remove('show');
+                }
+            };
+            
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                stopVoiceRecording();
+            };
+            
+            recognition.onend = () => {
+                stopVoiceRecording();
+            };
+        }
         
         // Request Camera and Microphone Permissions
         requestPermissionBtn.addEventListener('click', async () => {
@@ -392,13 +450,12 @@
             const message = messageInput.value.trim();
             if (!message) return;
             
-            // Add candidate message
             addMessage('candidate', message);
             messageInput.value = '';
             
-            // Show loading
             loadingIndicator.classList.add('show');
             sendBtn.disabled = true;
+            voiceBtn.disabled = true;
             
             try {
                 const response = await fetch(`/api/interview/${SESSION_TOKEN}/message/`, {
@@ -414,13 +471,13 @@
                 
                 loadingIndicator.classList.remove('show');
                 sendBtn.disabled = false;
+                voiceBtn.disabled = false;
                 
                 if (data.success) {
                     addMessage('agent', data.message);
                     updateStatus(data.stage, data.session_status);
                     
                     if (data.action === 'conclude') {
-                        // Interview concluded
                         messageInput.disabled = true;
                         sendBtn.disabled = true;
                         voiceBtn.disabled = true;
@@ -431,11 +488,17 @@
                 console.error('Send message error:', error);
                 loadingIndicator.classList.remove('show');
                 sendBtn.disabled = false;
+                voiceBtn.disabled = false;
             }
         }
         
-        // Voice Recording (Placeholder)
+        // Voice Recording with Web Speech API (FREE)
         voiceBtn.addEventListener('click', () => {
+            if (!recognition) {
+                alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+                return;
+            }
+            
             if (!isRecording) {
                 startVoiceRecording();
             } else {
@@ -446,58 +509,47 @@
         function startVoiceRecording() {
             isRecording = true;
             voiceBtn.textContent = '⏹️ Stop';
-            voiceBtn.style.background = '#dc3545';
+            voiceBtn.classList.add('voice-recording');
             
-            audioChunks = [];
-            mediaRecorder = new MediaRecorder(mediaStream);
-            
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-            
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                
-                // TODO: Send to transcription API
-                // For now, show placeholder
-                messageInput.value = "[Voice recorded - transcription pending]";
-                alert('Voice recording complete. Automatic transcription is a future feature. Please type your response.');
-            };
-            
-            mediaRecorder.start();
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error('Speech recognition start error:', error);
+                stopVoiceRecording();
+            }
         }
         
         function stopVoiceRecording() {
             isRecording = false;
             voiceBtn.textContent = '🎤 Voice';
-            voiceBtn.style.background = '';
+            voiceBtn.classList.remove('voice-recording');
             
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
+            if (recognition) {
+                try {
+                    recognition.stop();
+                } catch (error) {
+                    console.error('Speech recognition stop error:', error);
+                }
             }
         }
         
         // Anti-Cheating Monitoring
         function startAntiCheatingMonitoring() {
-            // Tab switching detection
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
                     logCheatingEvent('VISIBILITY_HIDDEN', { hidden: true });
                 }
             });
             
-            // Window blur detection
             window.addEventListener('blur', () => {
                 logCheatingEvent('WINDOW_BLUR', { timestamp: new Date().toISOString() });
             });
             
-            // Prevent right-click (optional)
             document.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 logCheatingEvent('CONTEXT_MENU', { attempted: true });
             });
             
-            // Detect copy/paste
             document.addEventListener('copy', () => {
                 logCheatingEvent('COPY_PASTE', { action: 'copy' });
             });
@@ -506,17 +558,18 @@
                 logCheatingEvent('COPY_PASTE', { action: 'paste' });
             });
             
-            // Monitor camera/mic status
             setInterval(() => {
-                const videoTrack = mediaStream.getVideoTracks()[0];
-                const audioTrack = mediaStream.getAudioTracks()[0];
-                
-                if (!videoTrack.enabled) {
-                    logCheatingEvent('CAMERA_OFF', { timestamp: new Date().toISOString() });
-                }
-                
-                if (!audioTrack.enabled) {
-                    logCheatingEvent('MIC_OFF', { timestamp: new Date().toISOString() });
+                if (mediaStream) {
+                    const videoTrack = mediaStream.getVideoTracks()[0];
+                    const audioTrack = mediaStream.getAudioTracks()[0];
+                    
+                    if (videoTrack && !videoTrack.enabled) {
+                        logCheatingEvent('CAMERA_OFF', { timestamp: new Date().toISOString() });
+                    }
+                    
+                    if (audioTrack && !audioTrack.enabled) {
+                        logCheatingEvent('MIC_OFF', { timestamp: new Date().toISOString() });
+                    }
                 }
             }, 5000);
         }
@@ -541,7 +594,6 @@
                     cheatingEventCount = data.cheating_score;
                     document.getElementById('cheatingDisplay').textContent = `${cheatingEventCount} events`;
                     
-                    // Show warning
                     warningText.textContent = `Suspicious activity detected: ${eventType}`;
                     warningBox.classList.add('show');
                     

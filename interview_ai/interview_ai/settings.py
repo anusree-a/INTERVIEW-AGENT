@@ -107,7 +107,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
-        'rest_framework.parsers.MultiPartParser',
+        'rest_framework.parsers.MultiPartParser'
     ],
 }
 
@@ -128,8 +128,8 @@ DEFAULT_FROM_EMAIL = 'noreply@interview-ai.com'
 HR_EMAIL = 'hr@company.com'  # Where to send interview reports
 
 # AI Agent Configuration
-# Use Anthropic Claude for the AI Interview Agent
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')  # Set this in environment or here
+
+USE_GROQ = False  # Change to False for Ollama
 
 # Alternative: OpenAI
 # OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')

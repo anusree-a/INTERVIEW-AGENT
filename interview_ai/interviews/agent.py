@@ -1,32 +1,42 @@
 """
-Agentic AI Interview Agent
-Single autonomous agent that conducts the entire interview lifecycle
+Agentic AI Interview Agent - FREE VERSION
+Uses Groq API (Free tier: 30 requests/minute)
+Alternative: Ollama (100% free, runs locally)
 """
 
 import json
 from django.conf import settings
 from .models import InterviewSession, Question
 from django.utils import timezone
-import anthropic
+import requests
 
 
 class InterviewAgent:
     """
-    Autonomous AI agent that conducts intelligent interviews
-    Maintains state, adapts questions, and evaluates responses
+    Autonomous AI agent using FREE APIs
+    - Primary: Groq (free tier, fast)
+    - Fallback: Ollama (local, 100% free)
     """
     
     def __init__(self, session: InterviewSession):
         self.session = session
-        self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self.model = "claude-sonnet-4-20250514"
+        self.use_groq = settings.USE_GROQ  # True for Groq, False for Ollama
+        
+        if self.use_groq:
+            self.api_key = settings.GROQ_API_KEY
+            self.api_url = "https://api.groq.com/openai/v1/chat/completions"
+            self.model = "llama-3.3-70b-versatile"  # Free, fast, powerful
+        else:
+            # Ollama runs locally
+            self.api_url = "http://localhost:11434/api/chat"
+            self.model = "llama3.2"  # or "mistral", "phi3"
         
         # Initialize agent state if not exists
         if not self.session.agent_state:
             self.session.agent_state = {
                 'current_stage': 'greeting',
                 'questions_asked': 0,
-                'performance_level': 'medium',  # low, medium, high
+                'performance_level': 'medium',
                 'skill_gaps': [],
                 'strong_areas': [],
             }
@@ -83,8 +93,8 @@ ADAPTIVE QUESTIONING:
 - If candidate excels: Ask more challenging questions, probe deeper
 - Always acknowledge good answers and encourage improvement
 
-RESPONSE FORMAT:
-Respond with a JSON object:
+RESPONSE FORMAT - CRITICAL:
+You MUST respond with ONLY a valid JSON object, no other text before or after:
 {{
     "message": "Your question or response to candidate",
     "stage": "current stage name",
@@ -97,13 +107,12 @@ Respond with a JSON object:
     "next_stage": "stage to move to, if progressing"
 }}
 
-Be conversational, professional, and adaptive. Your goal is to assess the candidate fairly while making them comfortable.
+IMPORTANT: Output ONLY the JSON object, nothing else. No explanations before or after.
 """
     
     def process_message(self, candidate_message: str):
         """
-        Process candidate's message and generate intelligent response
-        This is the core agentic decision-making function
+        Process candidate's message using FREE AI APIs
         """
         
         # Add candidate message to conversation history
@@ -113,30 +122,15 @@ Be conversational, professional, and adaptive. Your goal is to assess the candid
             'timestamp': timezone.now().isoformat()
         })
         
-        # Build conversation for Claude
+        # Build conversation for AI
         messages = self._build_conversation_context()
         
-        # Call Claude API
+        # Call FREE AI API
         try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=1000,
-                system=self.get_system_prompt(),
-                messages=messages
-            )
-            
-            agent_response = response.content[0].text
-            
-            # Parse JSON response
-            try:
-                response_data = json.loads(agent_response)
-            except json.JSONDecodeError:
-                # Fallback if not valid JSON
-                response_data = {
-                    'message': agent_response,
-                    'action': 'ask_question',
-                    'stage': self.session.agent_state.get('current_stage', 'greeting')
-                }
+            if self.use_groq:
+                response_data = self._call_groq(messages)
+            else:
+                response_data = self._call_ollama(messages)
             
             # Store agent response
             self.session.conversation_history.append({
@@ -146,7 +140,7 @@ Be conversational, professional, and adaptive. Your goal is to assess the candid
                 'timestamp': timezone.now().isoformat()
             })
             
-            # Update agent state based on response
+            # Update agent state
             self._update_agent_state(response_data, candidate_message)
             
             self.session.save()
@@ -156,16 +150,92 @@ Be conversational, professional, and adaptive. Your goal is to assess the candid
         except Exception as e:
             print(f"Agent error: {e}")
             return {
-                'message': "I apologize, but I'm having technical difficulties. Let's continue with the interview.",
+                'message': "I apologize for the technical difficulty. Let's continue with the interview.",
+                'action': 'ask_question',
+                'stage': self.session.agent_state.get('current_stage', 'greeting')
+            }
+    
+    def _call_groq(self, messages):
+        """Call Groq API (Free tier: 30 req/min, 6000 tokens/min)"""
+        
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'model': self.model,
+            'messages': [
+                {'role': 'system', 'content': self.get_system_prompt()},
+                *messages
+            ],
+            'temperature': 0.7,
+            'max_tokens': 1000
+        }
+        
+        response = requests.post(self.api_url, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        agent_response = result['choices'][0]['message']['content']
+        
+        # Parse JSON response
+        return self._parse_json_response(agent_response)
+    
+    def _call_ollama(self, messages):
+        """Call Ollama API (100% free, runs locally)"""
+        
+        # Build full prompt with system message
+        full_messages = [
+            {'role': 'system', 'content': self.get_system_prompt()},
+            *messages
+        ]
+        
+        payload = {
+            'model': self.model,
+            'messages': full_messages,
+            'stream': False
+        }
+        
+        response = requests.post(self.api_url, json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        agent_response = result['message']['content']
+        
+        # Parse JSON response
+        return self._parse_json_response(agent_response)
+    
+    def _parse_json_response(self, text):
+        """Extract and parse JSON from AI response"""
+        try:
+            # Try direct JSON parse
+            return json.loads(text)
+        except json.JSONDecodeError:
+            # Try to extract JSON from text
+            import re
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                try:
+                    return json.loads(json_match.group())
+                except:
+                    pass
+            
+            # Fallback response
+            return {
+                'message': text if text else "Let me ask you a question about your background.",
                 'action': 'ask_question',
                 'stage': self.session.agent_state.get('current_stage', 'greeting')
             }
     
     def _build_conversation_context(self):
-        """Build message history for Claude API"""
+        """Build message history for AI API"""
         messages = []
         
-        for msg in self.session.conversation_history:
+        # Keep last 10 messages for context (to save tokens)
+        recent_history = self.session.conversation_history[-10:]
+        
+        for msg in recent_history:
             if msg['role'] == 'user':
                 messages.append({
                     'role': 'user',
@@ -244,13 +314,12 @@ resume-based, and technical questions), and ask your first personal question to 
         return self.process_message(greeting_prompt)
     
     def generate_final_evaluation(self):
-        """Generate comprehensive evaluation report at the end"""
+        """Generate comprehensive evaluation report"""
         
         questions = Question.objects.filter(session=self.session)
         avg_score = sum(q.score for q in questions if q.score) / max(len(questions), 1)
         
-        evaluation_prompt = f"""
-Based on the complete interview with {self.session.candidate_name}, generate a comprehensive evaluation report.
+        evaluation_prompt = f"""Based on the complete interview with {self.session.candidate_name}, generate a comprehensive evaluation report.
 
 INTERVIEW SUMMARY:
 - Total Questions: {questions.count()}
@@ -258,32 +327,53 @@ INTERVIEW SUMMARY:
 - Cheating Violations: {self.session.cheating_score}
 - Duration: {(self.session.completed_at - self.session.started_at).seconds // 60} minutes
 
-Please provide:
+Provide:
 1. Overall Performance Assessment (2-3 sentences)
 2. Technical Skills Rating (1-10)
 3. Communication Skills Rating (1-10)
 4. Strengths (bullet points)
 5. Areas for Improvement (bullet points)
 6. Hiring Recommendation (Strong Yes / Yes / Maybe / No)
-7. Additional Comments
 
-Format as a professional evaluation report.
+Format as a professional report.
 """
         
-        messages = [{
-            'role': 'user',
-            'content': evaluation_prompt
-        }]
+        messages = [{'role': 'user', 'content': evaluation_prompt}]
         
         try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                system="You are an expert interviewer providing a final evaluation report. Be honest, constructive, and professional.",
-                messages=messages
-            )
-            
-            evaluation_text = response.content[0].text
+            if self.use_groq:
+                headers = {
+                    'Authorization': f'Bearer {self.api_key}',
+                    'Content-Type': 'application/json'
+                }
+                
+                payload = {
+                    'model': self.model,
+                    'messages': [
+                        {'role': 'system', 'content': 'You are an expert interviewer providing evaluation reports. Be honest and professional.'},
+                        *messages
+                    ],
+                    'temperature': 0.7,
+                    'max_tokens': 2000
+                }
+                
+                response = requests.post(self.api_url, headers=headers, json=payload)
+                result = response.json()
+                evaluation_text = result['choices'][0]['message']['content']
+            else:
+                # Ollama
+                payload = {
+                    'model': self.model,
+                    'messages': [
+                        {'role': 'system', 'content': 'You are an expert interviewer providing evaluation reports.'},
+                        *messages
+                    ],
+                    'stream': False
+                }
+                
+                response = requests.post(self.api_url, json=payload)
+                result = response.json()
+                evaluation_text = result['message']['content']
             
             # Update session with evaluation
             self.session.evaluation_report = evaluation_text

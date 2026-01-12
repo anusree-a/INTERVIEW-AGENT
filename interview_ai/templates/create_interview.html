@@ -32,10 +32,23 @@
             text-align: center;
         }
         
-        p {
+        .subtitle {
             text-align: center;
             color: #6c757d;
             margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+        
+        .info-box strong {
+            color: #1976d2;
         }
         
         .form-group {
@@ -49,7 +62,11 @@
             color: #495057;
         }
         
-        input, textarea {
+        label .required {
+            color: #dc3545;
+        }
+        
+        input {
             width: 100%;
             padding: 15px;
             border: 2px solid #e9ecef;
@@ -58,14 +75,9 @@
             transition: border 0.3s;
         }
         
-        input:focus, textarea:focus {
+        input:focus {
             outline: none;
             border-color: #667eea;
-        }
-        
-        .file-input {
-            padding: 10px;
-            background: #f8f9fa;
         }
         
         .btn {
@@ -100,38 +112,100 @@
         .back-link:hover {
             text-decoration: underline;
         }
+        
+        .feature-list {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .feature-list h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        
+        .feature-list ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 8px 0;
+            color: #6c757d;
+        }
+        
+        .feature-list li:before {
+            content: "✅ ";
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="form-container">
         <h1>📝 Create New Interview</h1>
-        <p>Enter candidate details and generate interview link</p>
+        <p class="subtitle">Enter candidate details to generate a personalized interview link</p>
         
-        <form method="POST" enctype="multipart/form-data">
+        <div class="info-box">
+            <strong>ℹ️ New Process:</strong> Candidates will upload their own resume when they open the interview link. This ensures you always get their latest information!
+        </div>
+        
+        <form method="POST">
             {% csrf_token %}
             
             <div class="form-group">
-                <label for="candidate_name">Candidate Name *</label>
-                <input type="text" id="candidate_name" name="candidate_name" required>
+                <label for="candidate_name">
+                    Candidate Name <span class="required">*</span>
+                </label>
+                <input 
+                    type="text" 
+                    id="candidate_name" 
+                    name="candidate_name" 
+                    placeholder="e.g., John Smith"
+                    required
+                >
             </div>
             
             <div class="form-group">
-                <label for="email">Email Address *</label>
-                <input type="email" id="email" name="email" required>
+                <label for="email">
+                    Email Address <span class="required">*</span>
+                </label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    placeholder="e.g., john.smith@email.com"
+                    required
+                >
             </div>
             
             <div class="form-group">
-                <label for="phone">Phone Number</label>
-                <input type="tel" id="phone" name="phone" placeholder="Optional">
+                <label for="phone">
+                    Phone Number (Optional)
+                </label>
+                <input 
+                    type="tel" 
+                    id="phone" 
+                    name="phone" 
+                    placeholder="e.g., +1 234 567 8900"
+                >
             </div>
             
-            <div class="form-group">
-                <label for="resume">Resume (PDF or DOCX)</label>
-                <input type="file" id="resume" name="resume" accept=".pdf,.docx" class="file-input">
+            <div class="feature-list">
+                <h3>🤖 What happens next:</h3>
+                <ul>
+                    <li>Unique interview link will be generated</li>
+                    <li>Email invitation sent to candidate automatically</li>
+                    <li>Candidate uploads their resume before interview</li>
+                    <li>AI analyzes resume and personalizes questions</li>
+                    <li>Interview conducted with adaptive AI agent</li>
+                    <li>You receive detailed evaluation report</li>
+                </ul>
             </div>
             
             <button type="submit" class="btn btn-primary">
-                ✨ Create Interview & Send Invite
+                ✨ Create Interview & Send Invitation
             </button>
         </form>
         

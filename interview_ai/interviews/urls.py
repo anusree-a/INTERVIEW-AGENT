@@ -6,6 +6,7 @@ urlpatterns = [
     path('interview/<uuid:token>/', views.interview_page, name='interview_page'),
     
     # API endpoints for interview interaction
+    path('api/interview/<uuid:token>/upload-resume/', views.upload_resume_api, name='upload_resume'),
     path('api/interview/<uuid:token>/start/', views.start_interview_api, name='start_interview'),
     path('api/interview/<uuid:token>/message/', views.send_message_api, name='send_message'),
     path('api/interview/<uuid:token>/cheating/', views.log_cheating_event_api, name='log_cheating'),

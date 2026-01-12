@@ -5,6 +5,7 @@ from django.views.decorators.http import require_http_methods
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
+from django.core.files.storage import default_storage
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -28,10 +29,66 @@ def interview_page(request, token):
     if session.status == 'TERMINATED':
         return render(request, 'interview_terminated.html', {'session': session})
     
+    # Check if resume is required and not uploaded
+    require_resume = settings.INTERVIEW_CONFIG.get('REQUIRE_RESUME_UPLOAD', True)
+    if require_resume and not session.resume:
+        return render(request, 'interview_upload_resume.html', {'session': session})
+    
     return render(request, 'interview.html', {'session': session})
 
 
 # ============== API Endpoints ==============
+
+@api_view(['POST'])
+def upload_resume_api(request, token):
+    """
+    API endpoint for candidate to upload resume before interview
+    """
+    session = get_object_or_404(InterviewSession, token=token)
+    
+    if session.status != 'CREATED':
+        return Response({
+            'error': 'Resume can only be uploaded before interview starts'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    resume_file = request.FILES.get('resume')
+    
+    if not resume_file:
+        return Response({
+            'error': 'No resume file provided'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Validate file type
+    allowed_extensions = ['.pdf', '.docx']
+    file_ext = resume_file.name.lower()[resume_file.name.rfind('.'):]
+    
+    if file_ext not in allowed_extensions:
+        return Response({
+            'error': 'Only PDF and DOCX files are allowed'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Validate file size (5MB max)
+    if resume_file.size > 5 * 1024 * 1024:
+        return Response({
+            'error': 'File size must be less than 5MB'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Save resume
+    session.resume = resume_file
+    session.save()
+    
+    # Parse resume in background (non-blocking)
+    try:
+        parse_resume_for_session(session)
+    except Exception as e:
+        print(f"Resume parsing error: {e}")
+        # Continue even if parsing fails
+    
+    return Response({
+        'success': True,
+        'message': 'Resume uploaded successfully'
+    })
+
 
 @api_view(['POST'])
 def start_interview_api(request, token):
@@ -41,6 +98,13 @@ def start_interview_api(request, token):
     """
     session = get_object_or_404(InterviewSession, token=token)
     
+    # Check if resume is required
+    require_resume = settings.INTERVIEW_CONFIG.get('REQUIRE_RESUME_UPLOAD', True)
+    if require_resume and not session.resume:
+        return Response({
+            'error': 'Please upload your resume first'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     # Mark permissions as granted
     session.camera_permission = request.data.get('camera_permission', False)
     session.microphone_permission = request.data.get('microphone_permission', False)
@@ -48,7 +112,10 @@ def start_interview_api(request, token):
     
     # Parse resume if not already done
     if session.resume and not session.parsed_resume_data:
-        parse_resume_for_session(session)
+        try:
+            parse_resume_for_session(session)
+        except Exception as e:
+            print(f"Resume parsing error during start: {e}")
     
     # Initialize agent and start interview
     agent = InterviewAgent(session)
@@ -146,7 +213,7 @@ def log_cheating_event_api(request, token):
     # Check if threshold exceeded
     threshold = settings.INTERVIEW_CONFIG.get('ANTI_CHEAT_THRESHOLD', 5)
     if session.cheating_score >= threshold:
-        # Optionally terminate interview
+        # Terminate interview
         session.terminate_interview()
         return Response({
             'success': True,
@@ -163,25 +230,22 @@ def log_cheating_event_api(request, token):
 @api_view(['POST'])
 def transcribe_audio_api(request, token):
     """
-    API endpoint to handle speech-to-text transcription
-    This is a placeholder - integrate with actual STT service
+    API endpoint for speech-to-text transcription (using Web Speech API)
+    Frontend handles transcription, this just receives the text
     """
     session = get_object_or_404(InterviewSession, token=token)
     
-    # In production, you would:
-    # 1. Receive audio blob from frontend
-    # 2. Send to STT service (Google Speech-to-Text, Whisper, etc.)
-    # 3. Return transcribed text
+    # Frontend sends already transcribed text
+    transcription = request.data.get('transcription', '')
     
-    audio_data = request.data.get('audio')
-    
-    # Placeholder response
-    # TODO: Implement actual STT integration
-    transcribed_text = "This is a placeholder transcription. Integrate real STT service."
+    if not transcription:
+        return Response({
+            'error': 'No transcription provided'
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     return Response({
         'success': True,
-        'transcription': transcribed_text
+        'transcription': transcription
     })
 
 
@@ -195,7 +259,8 @@ def interview_status_api(request, token):
         'stage': session.current_stage,
         'cheating_score': session.cheating_score,
         'questions_asked': session.agent_state.get('questions_asked', 0),
-        'conversation_history': session.conversation_history[-10:]  # Last 10 messages
+        'conversation_history': session.conversation_history[-10:],
+        'resume_uploaded': bool(session.resume)
     })
 
 
@@ -203,6 +268,7 @@ def interview_status_api(request, token):
 
 def hr_dashboard(request):
     """Main HR dashboard showing all interviews"""
+    from django.db.models import Avg
     sessions = InterviewSession.objects.all().order_by('-created_at')
     
     # Statistics
@@ -210,7 +276,7 @@ def hr_dashboard(request):
     completed = sessions.filter(status='COMPLETED').count()
     in_progress = sessions.filter(status='IN_PROGRESS').count()
     avg_score = sessions.filter(score__isnull=False).aggregate(
-        avg=models.Avg('score')
+        avg=Avg('score')
     )['avg'] or 0
     
     context = {
@@ -242,19 +308,17 @@ def interview_detail(request, token):
 
 
 def create_interview_session(request):
-    """Form to create new interview session"""
+    """Form to create new interview session (HR doesn't upload resume)"""
     if request.method == 'POST':
         candidate_name = request.POST.get('candidate_name')
         email = request.POST.get('email')
         phone = request.POST.get('phone', '')
-        resume = request.FILES.get('resume')
         
-        # Create session
+        # Create session WITHOUT resume (candidate will upload)
         session = InterviewSession.objects.create(
             candidate_name=candidate_name,
             email=email,
-            phone=phone,
-            resume=resume
+            phone=phone
         )
         
         # Send interview link to candidate
@@ -281,6 +345,7 @@ Please click the link below to start your interview:
 {interview_url}
 
 Important Instructions:
+- You will be asked to upload your resume (PDF or DOCX format)
 - Ensure you have a stable internet connection
 - Allow camera and microphone permissions when prompted
 - Find a quiet, well-lit environment
@@ -327,7 +392,3 @@ View full report: http://localhost:8000/hr/interview/{session.token}/
         [settings.HR_EMAIL],
         fail_silently=False,
     )
-
-
-# ============== Helper Import ==============
-from django.db import models
