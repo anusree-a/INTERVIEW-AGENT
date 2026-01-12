@@ -1,3 +1,615 @@
-<h2>Interview Session</h2>
-<p>Candidate: {{ session.candidate_name }}</p>
-<p>Status: {{ session.status }}</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interview - {{ session.candidate_name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .status-item {
+            text-align: center;
+        }
+        
+        .status-label {
+            font-size: 0.85em;
+            color: #6c757d;
+            text-transform: uppercase;
+        }
+        
+        .status-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            padding: 30px;
+        }
+        
+        .video-section {
+            position: relative;
+        }
+        
+        #videoPreview {
+            width: 100%;
+            border-radius: 15px;
+            background: #000;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .permission-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .permission-overlay.hidden {
+            display: none;
+        }
+        
+        .chat-section {
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 80%;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.agent {
+            background: #667eea;
+            color: white;
+            margin-right: auto;
+        }
+        
+        .message.candidate {
+            background: #e9ecef;
+            color: #212529;
+            margin-left: auto;
+        }
+        
+        .message-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        
+        .input-section {
+            display: flex;
+            gap: 10px;
+        }
+        
+        #messageInput {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1em;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .warning-box.show {
+            display: block;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Interview Assistant</h1>
+            <p>Welcome, {{ session.candidate_name }}</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">Status</div>
+                <div class="status-value" id="statusDisplay">{{ session.status }}</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Stage</div>
+                <div class="status-value" id="stageDisplay">{{ session.current_stage }}</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Monitoring</div>
+                <div class="status-value" id="cheatingDisplay">0 events</div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="video-section">
+                <video id="videoPreview" autoplay muted></video>
+                <div class="permission-overlay" id="permissionOverlay">
+                    <h3>📹 Camera & Microphone Access Required</h3>
+                    <p style="margin: 20px 0;">We need access to your camera and microphone to conduct the interview.</p>
+                    <button class="btn btn-success" id="requestPermissionBtn">Grant Permissions</button>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn btn-danger" id="toggleMicBtn" disabled>🎤 Mute</button>
+                    <button class="btn btn-danger" id="toggleCameraBtn" disabled>📹 Camera Off</button>
+                </div>
+                
+                <div class="warning-box" id="warningBox">
+                    <strong>⚠️ Warning:</strong> <span id="warningText"></span>
+                </div>
+            </div>
+            
+            <div class="chat-section">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message agent">
+                        <div class="message-header">AI Interviewer</div>
+                        <div>Please grant camera and microphone permissions to begin the interview.</div>
+                    </div>
+                </div>
+                
+                <div class="loading" id="loadingIndicator">
+                    <div class="spinner"></div>
+                    <p>AI is thinking...</p>
+                </div>
+                
+                <div class="input-section">
+                    <input type="text" id="messageInput" placeholder="Type your response or use voice..." disabled>
+                    <button class="btn btn-primary" id="sendBtn" disabled>Send</button>
+                    <button class="btn btn-primary" id="voiceBtn" disabled>🎤 Voice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SESSION_TOKEN = '{{ session.token }}';
+        let mediaStream = null;
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let cheatingEventCount = 0;
+        
+        // WebRTC Setup
+        const videoElement = document.getElementById('videoPreview');
+        const permissionOverlay = document.getElementById('permissionOverlay');
+        const requestPermissionBtn = document.getElementById('requestPermissionBtn');
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const warningBox = document.getElementById('warningBox');
+        const warningText = document.getElementById('warningText');
+        const toggleMicBtn = document.getElementById('toggleMicBtn');
+        const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+        
+        // Request Camera and Microphone Permissions
+        requestPermissionBtn.addEventListener('click', async () => {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                videoElement.srcObject = mediaStream;
+                permissionOverlay.classList.add('hidden');
+                
+                // Enable controls
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                voiceBtn.disabled = false;
+                toggleMicBtn.disabled = false;
+                toggleCameraBtn.disabled = false;
+                
+                // Start interview
+                startInterview();
+                
+                // Start anti-cheating monitoring
+                startAntiCheatingMonitoring();
+                
+            } catch (error) {
+                alert('Camera/Microphone access denied. Please allow access to continue.');
+                console.error('Media access error:', error);
+            }
+        });
+        
+        // Start Interview
+        async function startInterview() {
+            try {
+                const response = await fetch(`/api/interview/${SESSION_TOKEN}/start/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        camera_permission: true,
+                        microphone_permission: true
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addMessage('agent', data.message);
+                    updateStatus(data.stage, data.session_status);
+                }
+            } catch (error) {
+                console.error('Start interview error:', error);
+            }
+        }
+        
+        // Send Message
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            // Add candidate message
+            addMessage('candidate', message);
+            messageInput.value = '';
+            
+            // Show loading
+            loadingIndicator.classList.add('show');
+            sendBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`/api/interview/${SESSION_TOKEN}/message/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                
+                loadingIndicator.classList.remove('show');
+                sendBtn.disabled = false;
+                
+                if (data.success) {
+                    addMessage('agent', data.message);
+                    updateStatus(data.stage, data.session_status);
+                    
+                    if (data.action === 'conclude') {
+                        // Interview concluded
+                        messageInput.disabled = true;
+                        sendBtn.disabled = true;
+                        voiceBtn.disabled = true;
+                        alert('Interview completed! Thank you for your time.');
+                    }
+                }
+            } catch (error) {
+                console.error('Send message error:', error);
+                loadingIndicator.classList.remove('show');
+                sendBtn.disabled = false;
+            }
+        }
+        
+        // Voice Recording (Placeholder)
+        voiceBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                startVoiceRecording();
+            } else {
+                stopVoiceRecording();
+            }
+        });
+        
+        function startVoiceRecording() {
+            isRecording = true;
+            voiceBtn.textContent = '⏹️ Stop';
+            voiceBtn.style.background = '#dc3545';
+            
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(mediaStream);
+            
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                
+                // TODO: Send to transcription API
+                // For now, show placeholder
+                messageInput.value = "[Voice recorded - transcription pending]";
+                alert('Voice recording complete. Automatic transcription is a future feature. Please type your response.');
+            };
+            
+            mediaRecorder.start();
+        }
+        
+        function stopVoiceRecording() {
+            isRecording = false;
+            voiceBtn.textContent = '🎤 Voice';
+            voiceBtn.style.background = '';
+            
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+        }
+        
+        // Anti-Cheating Monitoring
+        function startAntiCheatingMonitoring() {
+            // Tab switching detection
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    logCheatingEvent('VISIBILITY_HIDDEN', { hidden: true });
+                }
+            });
+            
+            // Window blur detection
+            window.addEventListener('blur', () => {
+                logCheatingEvent('WINDOW_BLUR', { timestamp: new Date().toISOString() });
+            });
+            
+            // Prevent right-click (optional)
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                logCheatingEvent('CONTEXT_MENU', { attempted: true });
+            });
+            
+            // Detect copy/paste
+            document.addEventListener('copy', () => {
+                logCheatingEvent('COPY_PASTE', { action: 'copy' });
+            });
+            
+            document.addEventListener('paste', () => {
+                logCheatingEvent('COPY_PASTE', { action: 'paste' });
+            });
+            
+            // Monitor camera/mic status
+            setInterval(() => {
+                const videoTrack = mediaStream.getVideoTracks()[0];
+                const audioTrack = mediaStream.getAudioTracks()[0];
+                
+                if (!videoTrack.enabled) {
+                    logCheatingEvent('CAMERA_OFF', { timestamp: new Date().toISOString() });
+                }
+                
+                if (!audioTrack.enabled) {
+                    logCheatingEvent('MIC_OFF', { timestamp: new Date().toISOString() });
+                }
+            }, 5000);
+        }
+        
+        async function logCheatingEvent(eventType, metadata) {
+            try {
+                const response = await fetch(`/api/interview/${SESSION_TOKEN}/cheating/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        event_type: eventType,
+                        metadata: metadata
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    cheatingEventCount = data.cheating_score;
+                    document.getElementById('cheatingDisplay').textContent = `${cheatingEventCount} events`;
+                    
+                    // Show warning
+                    warningText.textContent = `Suspicious activity detected: ${eventType}`;
+                    warningBox.classList.add('show');
+                    
+                    setTimeout(() => {
+                        warningBox.classList.remove('show');
+                    }, 5000);
+                    
+                    if (data.terminated) {
+                        alert('Interview terminated due to excessive violations.');
+                        location.reload();
+                    }
+                }
+            } catch (error) {
+                console.error('Log cheating error:', error);
+            }
+        }
+        
+        // Toggle Controls
+        toggleMicBtn.addEventListener('click', () => {
+            const audioTrack = mediaStream.getAudioTracks()[0];
+            audioTrack.enabled = !audioTrack.enabled;
+            toggleMicBtn.textContent = audioTrack.enabled ? '🎤 Mute' : '🎤 Unmuted';
+        });
+        
+        toggleCameraBtn.addEventListener('click', () => {
+            const videoTrack = mediaStream.getVideoTracks()[0];
+            videoTrack.enabled = !videoTrack.enabled;
+            toggleCameraBtn.textContent = videoTrack.enabled ? '📹 Camera Off' : '📹 Camera On';
+        });
+        
+        // Helper Functions
+        function addMessage(role, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const header = document.createElement('div');
+            header.className = 'message-header';
+            header.textContent = role === 'agent' ? 'AI Interviewer' : 'You';
+            
+            const content = document.createElement('div');
+            content.textContent = text;
+            
+            messageDiv.appendChild(header);
+            messageDiv.appendChild(content);
+            chatMessages.appendChild(messageDiv);
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function updateStatus(stage, status) {
+            document.getElementById('stageDisplay').textContent = stage || 'greeting';
+            document.getElementById('statusDisplay').textContent = status || 'IN_PROGRESS';
+        }
+        
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>
